@@ -26,6 +26,19 @@
                 mapTypeId: google.maps.MapTypeId.ROADMAP
             };
 
+            function getGeoLocation() {
+                if (navigator.geolocation) {
+                    console.log("Browser claims to support geolocation.")         
+                    var timeoutVal = 10000; //10s timeout       
+                    navigator.geolocation.getCurrentPosition(
+                            foundLocation, 
+                            displayError,
+                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 })
+                } else {
+                    console.log("Geolocation is not supported by this browser");
+                }
+            }
+
 
             function foundLocation(position) {
                 console.log(position.coords)
@@ -128,17 +141,10 @@
 
             function initialize() {
 
-                localStorage.removeItem("mapOptions");
+                //localStorage.removeItem("mapOptions");
 
-                if (navigator.geolocation) {
-                    console.log("Browser claims to support geolocation.")         
-                    var timeoutVal = 10000; //10s timeout       
-                    navigator.geolocation.getCurrentPosition(
-                            foundLocation, 
-                            displayError,
-                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 })
-                } else {
-                    console.log("Geolocation is not supported by this browser");
+                if (localStorage.getItem("mapOptions") == null) {
+                    getGeoLocation()
                 }
 
                 monitorState();
