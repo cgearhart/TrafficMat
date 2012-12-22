@@ -117,6 +117,7 @@
 
             function stringToMapOptions(optString) {
                 var opts = JSON.parse( optString );
+                console.log(opts)
                 mapOptions.center = new google.maps.LatLng(opts.lat, opts.lng);
                 mapOptions.zoom = opts.zoom;
                 mapOptions.disableDefaultUI = opts.disableDefaultUI;
@@ -150,12 +151,13 @@
             function loadOptions() {
                 console.log('Reading localStorage.')
                 opts = localStorage.getItem( "mapOptions" );
-                mapOptions = stringToMapOptions(opts);
+                stringToMapOptions(opts);
+                console.log(mapOptions)
             }
 
             function initialize() {
 
-                localStorage.removeItem("mapOptions");
+                //localStorage.removeItem("mapOptions");
 
                 if (localStorage.getItem("mapOptions") != null) {
                     loadOptions();
