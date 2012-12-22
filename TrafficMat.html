@@ -48,6 +48,14 @@
 
                 console.log(mapOptions)
                 updateMap(mapOptions);
+                markerOpts = {
+                    draggable: false,
+                    raiseOnDrag: false,
+                    visible: true,
+                    position: location,
+                    map: map
+                };
+                marker = new google.maps.Marker(markerOpts);
                 storeOptions();
 
             }
@@ -139,13 +147,22 @@
                 localStorage.removeItem( "mapOptions" );
             }
 
+            function loadOptions() {
+                console.log('Reading localStorage.')
+                opts = localStorage.getItem( "mapOptions" );
+                mapOptions = stringToMapOptions(opts);
+            }
+
             function initialize() {
 
-                //localStorage.removeItem("mapOptions");
+                localStorage.removeItem("mapOptions");
 
-                if (localStorage.getItem("mapOptions") == null) {
-                    getGeoLocation()
+                if (localStorage.getItem("mapOptions") != null) {
+                    loadOptions();
+                } else {
+                    getGeoLocation();
                 }
+
 
                 monitorState();
 
