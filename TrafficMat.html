@@ -33,7 +33,8 @@
                     navigator.geolocation.getCurrentPosition(
                             foundLocation, 
                             displayError,
-                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 })
+                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 }
+                            )
                 } else {
                     console.log("Geolocation is not supported by this browser");
                 }
@@ -71,6 +72,12 @@
             }
 
 
+            function updateTraffic() {
+                var trafficLayer = new google.maps.TrafficLayer();
+                trafficLayer.setMap(map); 
+            }
+
+
             function updateMap(mapOptions) {
                 console.log('Updating the map.')
 
@@ -78,8 +85,7 @@
                 map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
 
                 //enable the traffic layer
-                var trafficLayer = new google.maps.TrafficLayer();
-                trafficLayer.setMap(map); 
+                updateTraffic();
             }
 
 
@@ -87,6 +93,7 @@
                 updateMap(mapOptions)
 
                 if (localStorage.getItem("mapOptions") == null) { //no stored data, state should be unfrozen
+                    console.log("monitorState() found no stored map options - button should say 'freeze'.")
                     $( "#action" ).button({ label: 'Freeze View' });
                     $( "#action" ).click( function ( event, ui ) {
                         $( "#action" ).unbind(); //necessary to avoid nested recursion
@@ -95,6 +102,7 @@
                         monitorState();
                         } );
                 } else { //data was found, window should be frozen
+                    console.log("monitorState() found localStorage entry - button should say 'release'.")
                     $( "#action" ).button({ label: 'Release View' });
                     $( "#action" ).click( function ( event, ui ) {
                         $( "#action" ).unbind(); //necessary to avoid nested recursion
@@ -165,6 +173,11 @@
                     getGeoLocation();
                 }
 
+                $( "#refresh" ).button({ label: 'Refresh Traffic' });
+                $( "#refresh" ).click( function (event, ui) { 
+                    console.log("updating traffic layer via refresh button.")
+                    updateTraffic();
+                     } )
 
                 monitorState();
 
@@ -172,21 +185,24 @@
 
         </script>
         <style type="text/css">
-            html { height: 100% }
-            body { height: 100%; margin: 0; padding: 0 }
-            #upper_box { height: 0px; }
-            #map_canvas { height: 100%; }
-            #contents { text-align:center; width:100%; height:100% }
-            #menu { position:absolute; z-index:1; bottom:1em; right:10px; text-align:right; width:100%; height:10% }
+            html { height:100% }
+            body { height:100%; margin:0; padding:0 }
+            #contents { width:100%; height:100% }
+            #map_canvas { height:100% }
+            #trafficMat_ui { position:absolute; z-index:1; right:10px; bottom:1em; width:auto; height:auto }
+            #menu { bottom:0px }
         </style>
     </head>
     
     <body onload="initialize()">
         <div id="contents">
-            <div id="upper_box"></div>
             <div id="map_canvas"></div>
-            <div id="menu">
-                <button id="action"></button>
+            <div id="trafficMat_ui">
+                <div id="message"></div>
+                <div id="menu">
+                    <button id="refresh"></button>
+                    <button id="action"></button>
+                </div>
             </div>
         </div>
     </body>
