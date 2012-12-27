@@ -15,124 +15,183 @@
         <script type="text/javascript" src="http://code.jquery.com/ui/1.9.2/jquery-ui.js"></script>
         <script type="text/javascript">
 
-            //global map and options objects - there should be only one of each
-            var map = {} 
+            /*********************** GLOBAL VARIABLES **********************/
+
+            //global map and option objects - there should be only one of each
+            var map = {}
             var mapOptions = { //default values
                 center: new google.maps.LatLng(44, -118),
                 zoom: 11,
-                disableDefaultUI: false,
-                disableDoubleClickZoom: false,
-                draggable: true,
+                //disableDefaultUI: false,
+                //disableDoubleClickZoom: false,
+                //draggable: true,
                 mapTypeId: google.maps.MapTypeId.ROADMAP
             };
+            var markerOptions = {
+                draggable: false,
+                raiseOnDrag: false,
+                visible: true,
+                position: {},
+                map: map
+            };
+
+
+            /********************** HELPER FUNCTIONS **********************/
+
+            function stringToMapOptions(optString) {
+                console.log("Converting options string into object.")
+                var optsCopy = JSON.parse( optString );
+                optsCopy.center = $.extend(new google.maps.LatLng,optsCopy.center)
+                return optsCopy
+            }
+
+
+            function mapOptionsToString(mapOpts) {
+                console.log("Converting options object to string.")
+                var optsCopy = $.extend(mapOpts,{}); //make a deep copy so you don't modify mapOpts in place
+                console.log(optsCopy)
+                return JSON.stringify(optsCopy);
+            }
+
+          
+            /************************* MAIN CODE **************************/
+
+            function initialize() {
+
+                //localStorage.removeItem("mapOptions"); // remove localStorage entry - used for debugging
+
+                if ( localStorage.getItem("mapOptions") != null ) {
+                    console.log("initialize(): Found mapOptions entry in localStorage.")
+                    mapOptions = loadOptions();  // returns immediately & initially draws map with previously saved options
+                } else {
+                    console.log("initialize(): No data found in localStorage.")
+                    getGeoLocation();
+                }
+
+                console.log("Continuing initialize() function...")
+
+                bindTrafficUpdateButton();  // set up the traffic button label & callback function
+                monitorViewState();  // set up the "freeze"/"release" button label & callback functions; will loop forever
+
+            }
+
+
+            function loadOptions() {
+                console.log("loadOptions() attempting to load \"mapOptions\" from localStorage.")
+                var tempOptions = stringToMapOptions(localStorage.getItem( "mapOptions" ))
+                return $.extend(mapOptions, tempOptions)
+            }
+
 
             function getGeoLocation() {
                 if (navigator.geolocation) {
-                    console.log("Browser claims to support geolocation.")         
-                    var timeoutVal = 10000; //10s timeout       
+                    console.log("getGeoLocation(): Browser claims to support geolocation. (This function is asynchronous.)")
+                    
+                    var timeoutVal = 10000;  //10s timeout       
                     navigator.geolocation.getCurrentPosition(
                             foundLocation, 
                             displayError,
-                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 }
-                            )
+                            { enableHighAccuracy: true, timeout: timeoutVal, maximumAge: 0 });
                 } else {
-                    console.log("Geolocation is not supported by this browser");
+                    console.log("getGeoLocation(): Geolocation is not supported by this browser.")
                 }
             }
 
 
             function foundLocation(position) {
+                console.log("Asynchronous function complete: getCurrentPosition() succeeded.")
+                console.log("  foundLocation(): Broswer geolocation function succeeded, yielding coodrinates:");
                 console.log(position.coords)
+                
                 var location = new google.maps.LatLng(position.coords.latitude,
                                                       position.coords.longitude);
                 mapOptions.center = location; //update the location once it has been determined
 
-                console.log(mapOptions)
-                updateMap(mapOptions);
-                markerOpts = {
-                    draggable: false,
-                    raiseOnDrag: false,
-                    visible: true,
-                    position: location,
-                    map: map
-                };
-                marker = new google.maps.Marker(markerOpts);
-                storeOptions();
+                if ( localStorage.getItem("mapOptions") == null ) {  // verify user hasn't already clicked save
+                    updateMap();  // redraw the map using the geolocated coordinates
+                    updateMarker(location);  // Place a marker at your current location
+                    //storeOptions();  // Save current map options to localStorage
+                }
 
+            }
+
+            function updateMarker(location) {
+                console.log("updateMarker(): Drawing new marker on existing map.")
+                markerOptions.position = location
+                marker = new google.maps.Marker(markerOpts);
             }
 
 
             function displayError(error) {
+                console.log("Asynchronous function complete: getCurrentPosition() failed.")
                 var errors = { 
                     1: 'Permission denied',
                     2: 'Position unavailable',
                     3: 'Request timeout'
                 };
-                console.log("Error: " + errors[error.code]);
+                console.log("  displayError(): " + errors[error.code]);
+            }
+
+
+            function updateMap() {
+                console.log('updateMap(): Drawing the map with the following options:')
+                console.log(mapOptions)
+
+                map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
+
+                updateTraffic();  // enable the traffic layer
             }
 
 
             function updateTraffic() {
+                console.log("updateTraffic(): Drawing traffic layer.")
                 var trafficLayer = new google.maps.TrafficLayer();
-                trafficLayer.setMap(map); 
+                trafficLayer.setMap(map);
             }
 
 
-            function updateMap(mapOptions) {
-                console.log('Updating the map.')
-
-                //display the map
-                map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
-
-                //enable the traffic layer
-                updateTraffic();
+            function bindTrafficUpdateButton() {
+                console.log("bindTrafficUpdateButton(): binding label & click callback.")
+                
+                $( "#refresh" ).button({ label: 'Refresh Traffic' });
+                $( "#refresh" ).click( function (event, ui) { 
+                    console.log("updating traffic layer via refresh button.")
+                    updateTraffic();
+                     } )
             }
 
 
-            function monitorState() {
-                updateMap(mapOptions)
+            function monitorViewState() {
+                updateMap()
 
                 if (localStorage.getItem("mapOptions") == null) { //no stored data, state should be unfrozen
-                    console.log("monitorState() found no stored map options - button should say 'freeze'.")
-                    $( "#action" ).button({ label: 'Freeze View' });
+                    console.log("monitorState(): No stored map options in localStorage - button should say 'Save View'.")
+                    $( "#action" ).button({ label: 'Save View' });
                     $( "#action" ).click( function ( event, ui ) {
-                        $( "#action" ).unbind(); //necessary to avoid nested recursion
-                        flipOptions();
-                        storeOptions();
-                        monitorState();
+                        $( "#action" ).unbind(); //necessary to avoid memory leak & nested recursion
+                        //flipOptions();
+                        localStorage.setItem("mapOptions", mapOptionsToString(mapOptions));  // save current settings
+                        monitorViewState();  // tail recursion to rebind & update label
                         } );
                 } else { //data was found, window should be frozen
-                    console.log("monitorState() found localStorage entry - button should say 'release'.")
-                    $( "#action" ).button({ label: 'Release View' });
+                    console.log("monitorState(): 'mapOptions' found in localStorage - button should say 'Reset View'.")
+                    $( "#action" ).button({ label: 'Reset View' });
                     $( "#action" ).click( function ( event, ui ) {
                         $( "#action" ).unbind(); //necessary to avoid nested recursion
-                        flipOptions();
-                        releaseOptions();
-                        monitorState();
+                        //flipOptions();
+                        localStorage.removeItem("mapOptions");  // clear current settings
+                        monitorViewState();  // tail recursion to rebind & update label
                         } );
                 }
             }
 
 
-            function mapOptionsToString(mapOpts) {
-                var opts = JSON.parse(JSON.stringify(mapOpts)); //make a deep copy so you don't modify mapOpts in place
-                opts.lat = mapOpts.center.lat();
-                opts.lng = mapOpts.center.lng();
-                delete opts.center;
-                return JSON.stringify(opts)
+            function runTimer() {
+
             }
 
-
-            function stringToMapOptions(optString) {
-                var opts = JSON.parse( optString );
-                console.log(opts)
-                mapOptions.center = new google.maps.LatLng(opts.lat, opts.lng);
-                mapOptions.zoom = opts.zoom;
-                mapOptions.disableDefaultUI = opts.disableDefaultUI;
-                mapOptions.disableDoubleClickZoom = opts.disableDoubleClickZoom;
-                mapOptions.draggable = opts.draggable;
-            }
-
+            
+            /************************* DEPRECATED *************************/
 
             function flipOptions() {
                 console.log('Updating mapOptions and flipping UI controls.')
@@ -141,47 +200,6 @@
                 mapOptions.draggable = !mapOptions.draggable;
             }
 
-
-            function storeOptions() {
-                console.log('Saving mapOptions to localStorage.')
-                mapOptions.center = map.getCenter();
-                mapOptions.zoom = map.getZoom();
-                localStorage.setItem( "mapOptions", mapOptionsToString(mapOptions) );
-            }
-
-            function releaseOptions() {
-                console.log('Clearing localStorage.')
-                mapOptions.center = map.getCenter();
-                mapOptions.zoom = map.getZoom();
-                localStorage.removeItem( "mapOptions" );
-            }
-
-            function loadOptions() {
-                console.log('Reading localStorage.')
-                opts = localStorage.getItem( "mapOptions" );
-                stringToMapOptions(opts);
-                console.log(mapOptions)
-            }
-
-            function initialize() {
-
-                //localStorage.removeItem("mapOptions");
-
-                if (localStorage.getItem("mapOptions") != null) {
-                    loadOptions();
-                } else {
-                    getGeoLocation();
-                }
-
-                $( "#refresh" ).button({ label: 'Refresh Traffic' });
-                $( "#refresh" ).click( function (event, ui) { 
-                    console.log("updating traffic layer via refresh button.")
-                    updateTraffic();
-                     } )
-
-                monitorState();
-
-            }
 
         </script>
         <style type="text/css">
