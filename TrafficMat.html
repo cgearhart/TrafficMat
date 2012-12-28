@@ -18,7 +18,7 @@
             /*********************** GLOBAL VARIABLES **********************/
 
             //global map and option objects - there should be only one of each
-            var map = {}
+            var map, geoPosition, timer;
             var mapOptions = { //default values
                 center: new google.maps.LatLng(44, -118),
                 zoom: 11,
@@ -32,7 +32,7 @@
                 raiseOnDrag: false,
                 visible: true,
                 position: {},
-                map: map
+                map: {}
             };
 
 
@@ -53,6 +53,16 @@
                 return JSON.stringify(optsCopy);
             }
 
+
+            function mapIsFrozen() {
+                return localStorage.getItem("mapOptions") != null ? true : false
+            }
+
+
+            function hasGeoLocation() {
+                return navigator.geolocation ? true : false
+            }
+
           
             /************************* MAIN CODE **************************/
 
@@ -60,7 +70,7 @@
 
                 //localStorage.removeItem("mapOptions"); // remove localStorage entry - used for debugging
 
-                if ( localStorage.getItem("mapOptions") != null ) {
+                if ( mapIsFrozen() ) {
                     console.log("initialize(): Found mapOptions entry in localStorage.")
                     mapOptions = loadOptions();  // returns immediately & initially draws map with previously saved options
                 } else {
@@ -70,8 +80,13 @@
 
                 console.log("Continuing initialize() function...")
 
-                bindTrafficUpdateButton();  // set up the traffic button label & callback function
-                monitorViewState();  // set up the "freeze"/"release" button label & callback functions; will loop forever
+                // bind buttons for appearance
+                $("#action").button()
+                $("#refresh").button()
+
+                updateMap();  // Draw the map
+                bindUpdateButton();  // set up the traffic button label & callback function
+                google.maps.event.trigger('idle');
 
             }
 
@@ -84,7 +99,7 @@
 
 
             function getGeoLocation() {
-                if (navigator.geolocation) {
+                if (hasGeoLocation() == true) {
                     console.log("getGeoLocation(): Browser claims to support geolocation. (This function is asynchronous.)")
                     
                     var timeoutVal = 10000;  //10s timeout       
@@ -103,13 +118,13 @@
                 console.log("  foundLocation(): Broswer geolocation function succeeded, yielding coodrinates:");
                 console.log(position.coords)
                 
-                var location = new google.maps.LatLng(position.coords.latitude,
+                geoPosition = new google.maps.LatLng(position.coords.latitude,
                                                       position.coords.longitude);
-                mapOptions.center = location; //update the location once it has been determined
+                mapOptions.center = geoPosition; //update the location once it has been determined
 
                 if ( localStorage.getItem("mapOptions") == null ) {  // verify user hasn't already clicked save
                     updateMap();  // redraw the map using the geolocated coordinates
-                    updateMarker(location);  // Place a marker at your current location
+                    updateMarker(geoPosition);  // Place a marker at your current location
                     //storeOptions();  // Save current map options to localStorage
                 }
 
@@ -117,8 +132,9 @@
 
             function updateMarker(location) {
                 console.log("updateMarker(): Drawing new marker on existing map.")
-                markerOptions.position = location
-                marker = new google.maps.Marker(markerOpts);
+                markerOptions.position = location;
+                markerOptions.map = map;
+                marker = new google.maps.Marker(markerOptions);
             }
 
 
@@ -134,12 +150,25 @@
 
 
             function updateMap() {
-                console.log('updateMap(): Drawing the map with the following options:')
-                console.log(mapOptions)
+                console.log('updateMap():')
+                
+                if ( map == null || mapOptions.zoom != map.getZoom() ) {
+                    console.log('  Drawing the map with the following options:')
+                    console.log(mapOptions)
 
-                map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
+                    map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
+                    google.maps.event.addListener(map, 'idle', idleListener);
 
-                updateTraffic();  // enable the traffic layer
+                    // These event listeners prevent the map from snapping back while you're still moving it.
+                    google.maps.event.addListener(map, 'center_changed', resetTimer);
+                    google.maps.event.addListener(map, 'zoom_changed', resetTimer);
+
+                    updateTraffic();  // enable the traffic layer
+
+                } else {
+                    console.log('  Panning the map back to stored center point.')
+                    map.panTo(mapOptions.center);
+                }
             }
 
 
@@ -150,44 +179,94 @@
             }
 
 
-            function bindTrafficUpdateButton() {
-                console.log("bindTrafficUpdateButton(): binding label & click callback.")
+            function bindUpdateButton() {
+                console.log("bindUpdateButton(): Binding label & click callback to \"Refresh\" button.")
                 
-                $( "#refresh" ).button({ label: 'Refresh Traffic' });
+                $( "#refresh" ).button({ label: 'Refresh' });
                 $( "#refresh" ).click( function (event, ui) { 
-                    console.log("updating traffic layer via refresh button.")
+                    console.log("click(): Refresh button callback triggered.")
+                    getGeoLocation();
                     updateTraffic();
                      } )
             }
 
 
-            function monitorViewState() {
-                updateMap()
+            function idleListener() {
+                timer = (timer == null ? null : window.clearTimeout(timer));
+                var nowCenter =  map.getCenter();
+                var nowZoom = map.getZoom();
+                var oldCenter = mapOptions.center;
 
-                if (localStorage.getItem("mapOptions") == null) { //no stored data, state should be unfrozen
-                    console.log("monitorState(): No stored map options in localStorage - button should say 'Save View'.")
-                    $( "#action" ).button({ label: 'Save View' });
-                    $( "#action" ).click( function ( event, ui ) {
-                        $( "#action" ).unbind(); //necessary to avoid memory leak & nested recursion
-                        //flipOptions();
-                        localStorage.setItem("mapOptions", mapOptionsToString(mapOptions));  // save current settings
-                        monitorViewState();  // tail recursion to rebind & update label
-                        } );
-                } else { //data was found, window should be frozen
-                    console.log("monitorState(): 'mapOptions' found in localStorage - button should say 'Reset View'.")
-                    $( "#action" ).button({ label: 'Reset View' });
-                    $( "#action" ).click( function ( event, ui ) {
-                        $( "#action" ).unbind(); //necessary to avoid nested recursion
-                        //flipOptions();
-                        localStorage.removeItem("mapOptions");  // clear current settings
-                        monitorViewState();  // tail recursion to rebind & update label
-                        } );
+                var dist = Math.abs(nowCenter.lat()-oldCenter.lat())+Math.abs(nowCenter.lng()-oldCenter.lng())
+
+                if (dist <= .001 && nowZoom == mapOptions.zoom) {
+                    if ( mapIsFrozen() ) {
+                        console.log("idleListener(): Map is frozen; bind button to 'Unlock'.")
+                        bindSaveButton("unlock");
+                    } else {
+                        console.log("idleListener(): Map is unlocked; bind button to 'Lock'.")
+                        bindSaveButton("lock");
+                    }
+                } else if ( mapIsFrozen() ){
+                    console.log("idleListener(): The map has moved; bind button to 'Lock'.")
+                    bindSaveButton("lock");
+                    snapBack(10);
+                }    
+                
+            }
+
+            
+            function snapBack(countdown) {
+                console.log('snapBack(): The map has moved or changed zoom.')
+
+                if (countdown > 0) {
+                    console.log(countdown)
+                    $("#message").html("Recentering in " + countdown + "s...");
+                    timer = window.setTimeout(function () { snapBack(countdown) }, 1000);  // 1 second delay
+                    countdown--;
+                } else if (countdown == 0) {
+                    $("#message").html("");
+                    updateMap();
                 }
             }
 
 
-            function runTimer() {
+            function bindSaveButton(state) {
+                $("action").unbind()
+                if (state == "lock") {
+                    $("#action").button({label: 'Lock View'});
+                    $("#action").click( function (event, ui) {
+                        console.log("click(): Lock view state.")
+                        $( "#action" ).unbind();  // necessary to avoid memory leak & nested recursion
+                        clickToSave();
+                        updateMap();
+                        bindSaveButton("unlock");  // tail recursion to rebind & update label
+                    });
+                } else if (state == "unlock") {
+                    $("#action").button({ label: 'Unlock View' });
+                    $("#action").click( function ( event, ui ) {
+                        console.log("click(): Unlock view state.")
+                        $( "#action" ).unbind();  //necessary to avoid nested recursion
+                        localStorage.removeItem("mapOptions");  // clear current settings
+                        bindSaveButton("lock");  // tail recursion to rebind & update label
+                    });
+                } else {
+                    console.log("bindSaveButton(): Invalid input.")
+                }
+            }
 
+
+            function clickToSave() {
+                console.log("clickToSave(): Saving map settings.")
+                mapOptions.center = map.getCenter();
+                mapOptions.zoom = map.getZoom();
+                localStorage.setItem("mapOptions", mapOptionsToString(mapOptions));  // save current settings
+                timer = (timer == null ? null : window.clearTimeout(timer)); // clear the timer (in case user clicks re-save)
+            }
+
+            function resetTimer() {
+                timer = (timer == null ? null : window.clearTimeout(timer));
+                $("#message").html("");
             }
 
             
@@ -207,6 +286,7 @@
             body { height:100%; margin:0; padding:0 }
             #contents { width:100%; height:100% }
             #map_canvas { height:100% }
+            #message { text-align:right; line-height:1.4; font-family: Verdana,Arial,sans-serif; font-size: 1em }
             #trafficMat_ui { position:absolute; z-index:1; right:10px; bottom:1em; width:auto; height:auto }
             #menu { bottom:0px }
         </style>
