@@ -18,7 +18,7 @@
             /*********************** GLOBAL VARIABLES **********************/
 
             //global map and option objects - there should be only one of each
-            var map, geoPosition, timer;
+            var map, geoPosition, marker, timer;
             var mapOptions = { //default values
                 center: new google.maps.LatLng(44, -118),
                 zoom: 11,
@@ -131,6 +131,7 @@
             }
 
             function updateMarker(location) {
+                if (marker) { marker.setMap(null); }
                 console.log("updateMarker(): Drawing new marker on existing map.")
                 markerOptions.position = location;
                 markerOptions.map = map;
