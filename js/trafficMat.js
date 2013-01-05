@@ -100,8 +100,7 @@
                 $("#message").html("Recentering in " + timeLimit + "s...");
                 this.timer = window.setTimeout(function () { map.snapBack(timeLimit-1) }, 1000);  // 1 second delay
             } else if ( timeLimit == 0 ) {
-                this.handle.setZoom(map.zoom);
-                this.handle.panTo(map.center);
+                this.drawMap();
                 resetTimer();
             }
             return false;
@@ -120,9 +119,16 @@
             this.drawMap();
             this.drawTraffic();
 
+            google.maps.event.clearInstanceListeners(this.handle);  // clear all previously attached listeners
             google.maps.event.addListener(this.handle, "idle", idleListener);
             google.maps.event.addListener(this.handle, "drag", resetTimer);
             google.maps.event.addListener(this.handle, "zoom_changed", resetTimer);
+
+            // should handle mobile tilt
+            google.maps.event.addListener(this.handle, "resize", function() { map.drawMap(); });  
+            if ( $.browser.mobile ) {
+                window.addEventListener("orientationchange", function () { map.drawMap(); }, false );
+            }
 
         }
     },
@@ -154,26 +160,28 @@
         }
     },
 
-    watchPosition = function () {  // use HTML5 geolocation to get device position - callbacks are asynchronous
-        var
-        glOptions = {
+    gpsLocation = {  // use HTML5 geolocation to get device position - callbacks are asynchronous
+        glOptions: {
             enableHighAccuracy: true,
             timeout: 10000,  // default 10s timeout
-            maximumAge: 300000  // 5 minute update cycle
+            maximumAge: 0  // 0 minute update cycle
         },
-        locationFound = function(position) {  // called when HTML5 geolocation succeeds
+        locationFound: function (position) {  // called when HTML5 geolocation succeeds
             console.log("Geolocation success");
             var location = new google.maps.LatLng(position.coords.latitude,
-                                                      position.coords.longitude);
+                                                  position.coords.longitude);
             if ( !map.isSaved && !marker.handle ) {
                 map.center = location;
                 map.zoom = 11;
                 map.initialize();
             }
 
-            marker.draw(location);
+            if ( !this.timestamp || position.timestamp - this.timestamp >= 250000 ) {  // only draw the marker if it's a few minutes old
+                this.timestamp = position.timestamp;
+                marker.draw(location);
+            }
         },
-        locationError = function (error) {  // called when HTML5 geolocation fails
+        locationError: function (error) {  // called when HTML5 geolocation fails
             var errors = { 
                 1: 'Permission denied',
                 2: 'Position unavailable',
@@ -181,10 +189,15 @@
             };
             console.log("  displayError(): " + errors[error.code]);
         },
-        watchID = navigator.geolocation.watchPosition( locationFound,
-                                                       locationError, 
-                                                       glOptions);
-        return watchID;  // Return the UID of the watch process; the UID is needed to kill the process
+        getPosition: function () { 
+            navigator.geolocation.getCurrentPosition(gpsLocation.locationFound,
+                                                     gpsLocation.locationError, 
+                                                     gpsLocation.glOptions);
+        },
+        initialize: function () {
+            this.getPosition();  // needs to be called before the interval timer is started
+            this.handle = setInterval(this.getPosition, 300000);  // update every 5 minutes
+        }
     };
 
     // Initialize the app
@@ -197,14 +210,12 @@
         })
     });
 
-    // Initialize geolocation when app first loads - helps tolerate response delay
-    if ("geolocation" in navigator) { 
-        watchID = watchPosition();
-    }
-
     // Need public method to initialize the app using "body onload"; otherwise map_canvas id doesn't exist & causes error
     ns.trafficMat = {
         initialize: function (target_id) { 
+            if ("geolocation" in navigator) { 
+                gpsLocation.initialize();
+            }
             map.initialize(target_id);
         }
     };
