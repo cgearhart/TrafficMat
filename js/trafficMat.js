@@ -97,7 +97,7 @@
 
         snapBack: function (timeLimit) {
             if ( timeLimit > 0 && !this.isStatic ) {
-                $("#message").html("Recentering in " + timeLimit + "s...");
+                if (timeLimit <= 5) $("#message").html("Recentering in " + timeLimit + "s...");  // silent delays over 5 seconds
                 this.timer = window.setTimeout(function () { map.snapBack(timeLimit-1) }, 1000);  // 1 second delay
             } else if ( timeLimit == 0 ) {
                 this.drawMap();
@@ -136,7 +136,7 @@
     idleListener = function () {
         resetTimer();
         monitorLockButton();
-        if ( map.isSaved && !map.isStatic ) map.snapBack(10);
+        if ( map.isSaved && !map.isStatic ) map.snapBack(7);
     },
 
     resetTimer = function () {
