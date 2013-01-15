@@ -10,42 +10,6 @@
 
     target_id,
 
-    ui_buttons = {
-        lock: { label: "Lock" },
-        unlock: { label: "Unlock" },
-        refresh: { label: "Refresh" }
-    },
-
-    monitorLockButton = function () {
-        $(function () {  // Must wrap in a jQuery anonymous function to get jQuery-ui inside the library
-            
-            $( "#action" ).unbind();  // Disable all callback events
-
-            if ( map.isSaved && map.isStatic ) {
-                $( "#action" ).button( ui_buttons.unlock )
-                $( "#action" ).click( function (event, ui) {  // click this to unlock the map
-                    console.log("Clearing location & zoom; switching to 'lock'.");
-                    localStorage.removeItem("lat");
-                    localStorage.removeItem("lng");
-                    localStorage.removeItem("zoom");
-                    monitorLockButton();
-                    resetTimer();
-                });
-            } else {
-                $( "#action" ).button( ui_buttons.lock )
-                $( "#action" ).click( function (event, ui) {  // click this to lock the map
-                    console.log("Saving location & zoom; switching button to 'unlock'.");
-                    map.center = map.handle.getCenter();
-                    map.zoom = map.handle.getZoom();
-                    localStorage.setItem("lat", map.center.lat());
-                    localStorage.setItem("lng", map.center.lng());
-                    localStorage.setItem("zoom", map.zoom);
-                    monitorLockButton();
-                    resetTimer();
-                });
-            }
-        });
-    },
 
     map = {
 
@@ -73,6 +37,7 @@
         },
 
         drawMap: function () {
+
             var options = {  
                 center: this.center,
                 zoom: this.zoom,
@@ -80,41 +45,46 @@
                 minZoom: 4,
                 mapTypeId: google.maps.MapTypeId.ROADMAP
             };
+
             if ( !this.handle ) {
                 this.handle = new google.maps.Map(window.document.getElementById(this.target_id), options);    
             } else {
-                this.handle.panTo(this.center);
-                if ( this.zoom != this.handle.getZoom() ) {
+                this.handle.panTo(this.center);  // Always try returning to center - does nothing if already centered
+                if ( this.zoom != this.handle.getZoom() ) {  // Redraws whole map - only try if zoom has changed
                     this.handle.setZoom(this.zoom);
                 }
             }
-        },
-
-        drawTraffic: function () {
+        },        drawTraffic: function () {
             this.trafficLayer = new google.maps.TrafficLayer();
             this.trafficLayer.setMap(this.handle);
         },
 
         snapBack: function (timeLimit) {
+
             if ( timeLimit > 0 && !this.isStatic ) {
                 if (timeLimit <= 5) $("#message").html("Recentering in " + timeLimit + "s...");  // silent delays over 5 seconds
                 this.timer = window.setTimeout(function () { map.snapBack(timeLimit-1) }, 1000);  // 1 second delay
             } else if ( timeLimit == 0 ) {
                 this.drawMap();
-                resetTimer();
+                resetTimer();  // Needed to clear the countdown message from the screen
             }
+
             return false;
         },
 
         initialize: function (target_id) {
+
             this.target_id = this.target_id || target_id;
+
             if ( this.isSaved ) {
                 this.load();
             }
+
             // set default values if undefined or wrong type
             if ( typeof this.center !== typeof new google.maps.LatLng() ) {
                 this.center =  new google.maps.LatLng(40, -98);
             }
+
             this.zoom = this.zoom || 5;
             this.drawMap();
             this.drawTraffic();
@@ -133,18 +103,8 @@
         }
     },
 
-    idleListener = function () {
-        resetTimer();
-        monitorLockButton();
-        if ( map.isSaved && !map.isStatic ) map.snapBack(7);
-    },
 
-    resetTimer = function () {
-        map.timer = ( !map.timer ? null : window.clearTimeout(map.timer));  // reset the timer
-        $( "#message" ).html("");
-    },
-
-    marker = {
+    marker = {  // Handles drawing the GPS marker on the map
         draw: function (location) {
             if (this.handle) this.handle.setMap(null);  // clear the marker from the map if already defined
 
@@ -159,13 +119,16 @@
             this.handle = new google.maps.Marker(options);
         }
     },
+    
 
     gpsLocation = {  // use HTML5 geolocation to get device position - callbacks are asynchronous
+
         glOptions: {
             enableHighAccuracy: true,
             timeout: 10000,  // default 10s timeout
             maximumAge: 0  // 0 minute update cycle
         },
+
         locationFound: function (position) {  // called when HTML5 geolocation succeeds
             console.log("Geolocation success");
             var location = new google.maps.LatLng(position.coords.latitude,
@@ -181,6 +144,7 @@
                 marker.draw(location);
             }
         },
+
         locationError: function (error) {  // called when HTML5 geolocation fails
             var errors = { 
                 1: 'Permission denied',
@@ -189,33 +153,83 @@
             };
             console.log("  displayError(): " + errors[error.code]);
         },
+
         getPosition: function () { 
             navigator.geolocation.getCurrentPosition(gpsLocation.locationFound,
                                                      gpsLocation.locationError, 
                                                      gpsLocation.glOptions);
         },
+
         initialize: function () {
             this.getPosition();  // needs to be called before the interval timer is started
             this.handle = setInterval(this.getPosition, 300000);  // update every 5 minutes
         }
     };
 
+
+    monitorLockButton = function () {
+        $(function () {  // Must wrap in a jQuery anonymous function to get jQuery-ui inside the library
+            
+            $( "#action" ).unbind();  // Disable all callback events
+
+            if ( map.isSaved && map.isStatic ) {
+                $( "#action" ).button( { label: "Unlock" } )
+                $( "#action" ).click( function (event, ui) {  // click this to unlock the map
+                    console.log("Clearing location & zoom; switching to 'lock'.");
+                    localStorage.removeItem("lat");
+                    localStorage.removeItem("lng");
+                    localStorage.removeItem("zoom");
+                    monitorLockButton();
+                    resetTimer();
+                });
+            } else {
+                $( "#action" ).button( { label: "Lock" } )
+                $( "#action" ).click( function (event, ui) {  // click this to lock the map
+                    console.log("Saving location & zoom; switching button to 'unlock'.");
+                    map.center = map.handle.getCenter();
+                    map.zoom = map.handle.getZoom();
+                    localStorage.setItem("lat", map.center.lat());
+                    localStorage.setItem("lng", map.center.lng());
+                    localStorage.setItem("zoom", map.zoom);
+                    monitorLockButton();
+                    resetTimer();
+                });
+            }
+        });
+    },
+
+
+    idleListener = function () {
+        resetTimer();
+        monitorLockButton();
+        if ( map.isSaved && !map.isStatic ) map.snapBack(7);
+    },
+
+
+    resetTimer = function () {
+        map.timer = ( !map.timer ? null : window.clearTimeout(map.timer));  // reset the timer
+        $( "#message" ).html("");
+    },
+
+
     // Initialize the app
 
-    // Start drawing the UI & bind refresh callback
-    $(function() { $( "#refresh" ).button(ui_buttons.refresh); } ); // has to be wrapped in a jQuery anon function
-    $(function() { $( "#action" ).button(ui_buttons.unlock); } ); // has to be wrapped in a jQuery anon function
+    // Draw UI buttons & bind refresh button callback
+    $(function() { $( "#refresh" ).button( { label: "Refresh" } ); } ); // has to be wrapped in a jQuery anon function
+    $(function() { $( "#action" ).button( { label: "Unlock" } ); } ); // has to be wrapped in a jQuery anon function
     $(function() { $( "#refresh" ).click( function (event, ui) { 
             map.drawTraffic();
         })
     });
 
-    // Need public method to initialize the app using "body onload"; otherwise map_canvas id doesn't exist & causes error
+    // Need public method to initialize the app using "body onload"; otherwise id=map_canvas doesn't exist & causes error
     ns.trafficMat = {
+        
         initialize: function (target_id) { 
-            if ("geolocation" in navigator) { 
+            if ("geolocation" in navigator) {  // Attempt geolocation
                 gpsLocation.initialize();
             }
+
             map.initialize(target_id);
         }
     };
