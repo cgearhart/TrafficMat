@@ -15,7 +15,9 @@
 
         distanceBetween: google.maps.geometry.spherical.computeDistanceBetween,  // its a long name - shorten it
 
+
         get isSaved () { return (localStorage.getItem("lat") ? true : false); },
+
         
         get isStatic () {  // test whether the map is at the saved zoom/center configuration
             if ( this.handle && this.center ) {
@@ -27,6 +29,7 @@
             return false;
         },
 
+
         load: function () {
             var 
             lat = JSON.parse(localStorage.getItem("lat")),
@@ -35,6 +38,7 @@
             this.center = new google.maps.LatLng(lat,lng);
             this.zoom = JSON.parse(localStorage.getItem("zoom"));
         },
+
 
         drawMap: function () {
 
@@ -54,10 +58,14 @@
                     this.handle.setZoom(this.zoom);
                 }
             }
-        },        drawTraffic: function () {
+        },        
+
+
+        drawTraffic: function () {
             this.trafficLayer = new google.maps.TrafficLayer();
             this.trafficLayer.setMap(this.handle);
         },
+
 
         snapBack: function (timeLimit) {
 
@@ -71,6 +79,7 @@
 
             return false;
         },
+
 
         initialize: function (target_id) {
 
@@ -109,8 +118,8 @@
             if (this.handle) this.handle.setMap(null);  // clear the marker from the map if already defined
 
             var options = {
-                draggable: false,
-                raiseOnDrag: false,
+                draggable: true,
+                raiseOnDrag: true,
                 visible: true,
                 position: location,
                 map: map.handle
@@ -129,6 +138,7 @@
             maximumAge: 0  // 0 minute update cycle
         },
 
+
         locationFound: function (position) {  // called when HTML5 geolocation succeeds
             console.log("Geolocation success");
             var location = new google.maps.LatLng(position.coords.latitude,
@@ -145,6 +155,7 @@
             }
         },
 
+
         locationError: function (error) {  // called when HTML5 geolocation fails
             var errors = { 
                 1: 'Permission denied',
@@ -154,11 +165,13 @@
             console.log("  displayError(): " + errors[error.code]);
         },
 
+
         getPosition: function () { 
             navigator.geolocation.getCurrentPosition(gpsLocation.locationFound,
                                                      gpsLocation.locationError, 
                                                      gpsLocation.glOptions);
         },
+
 
         initialize: function () {
             this.getPosition();  // needs to be called before the interval timer is started
